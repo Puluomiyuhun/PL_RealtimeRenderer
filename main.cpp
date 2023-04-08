@@ -7,10 +7,6 @@
 #include"myCamera.h"
 #include"myModel.h"
 
-unsigned int VAO[2]; 
-unsigned int VBO[2]; 
-unsigned int EBO[2];
-unsigned int TEX[2];
 float screenWidth = 800, screenHeight = 600;
 double lastX = 0, lastY = 0;
 bool firstMouse = true;
@@ -29,7 +25,7 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    float cameraSpeed = 0.003f; // adjust accordingly
+    float cameraSpeed = 0.01f; // adjust accordingly
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera->cameraPos += cameraSpeed * camera->cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -82,6 +78,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
 int main()
 {
+    /*opengl窗口初始化*/
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);                                //主版本：3
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);                                //次版本：3
@@ -105,16 +102,25 @@ int main()
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetScrollCallback(window, scroll_callback);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
 
+    /*Shader设置*/
+    //myShader shader = myShader("shader/light.vsh", "shader/light.fsh");
     myShader shader = myShader("shader/light.vsh", "shader/light.fsh");
     unsigned int shaderProgram = shader.ID;
 
+    /*模型设置*/
     myMesh* mesh1 = new myMesh(glm::vec3(-4, 7, 0), glm::vec3(3, 3, 3), myTexture{loadTexture("Albedo1.jpg"),"diffuse_texture"});
     mesh1->Setup();
     myMesh* mesh2 = new myMesh(glm::vec3(4, 7, 0), glm::vec3(3, 3, 3), myTexture{ loadTexture("Albedo2.jpg"),"diffuse_texture" });
     mesh2->Setup();
-    myModel* models = new myModel("D:/blender/941c2a7f-ea44-41aa-924a-e2ba967ab2b1.fbx", true);
+    myModel* models = new myModel("D:/blender/nanosuit/nanosuit.obj", false);
 
+    /*相机设置*/
     camera = new myCamera(glm::vec3(0.0f, 4.0f, 10.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), Euler{ 0.0f,-90.0f,0.0f }, 45.0f);
     while (!glfwWindowShouldClose(window))     //开始渲染循环
     {
@@ -122,10 +128,11 @@ int main()
 
         //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         glUseProgram(shaderProgram);
 
+        /*shader光源设置*/
         shader.setVec3("dl[0].dir", glm::vec3(-1, -1, -1));
         shader.setVec3("dl[0].color", glm::vec3(1.0f, 1.0f, 1.0f));
         shader.setVec3("pl[0].pos", glm::vec3(0.3f, 5.0f, 3.0f));
@@ -134,8 +141,10 @@ int main()
         shader.setFloat("pl[0].linear", 0.5f);
         shader.setFloat("pl[0].quadratic", 0.3f);
 
+        /*shader相机设置*/
         shader.setVec3("cameraPos", camera->cameraPos);
 
+        /*shader空间变换设置*/
         glm::mat4 model = glm::identity<glm::mat4>();
         model = glm::rotate(model, glm::radians(-0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::mat4 view = camera->getView();
@@ -145,8 +154,9 @@ int main()
         shader.setMatrix("view", view);
         shader.setMatrix("projection", projection); 
 
+        /*shader材质参数设置*/
         shader.setVec3("material.ambient", glm::vec3(0.3f, 0.3f, 0.3f));
-        shader.setVec3("material.diffuse", glm::vec3(0.5f, 0.5f, 0.5f));
+        shader.setVec4("material.diffuse", glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
         shader.setVec3("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
         shader.setFloat("material.shininess_n", 64.0f);
 
@@ -157,8 +167,6 @@ int main()
         glfwSwapBuffers(window);               //双缓冲，交换前后buffer
         glfwPollEvents();                      //检查事件队列中是否有事件传达
     }
-    glDeleteVertexArrays(2, VAO);
-    glDeleteBuffers(2, VBO);
     glDeleteProgram(shaderProgram);
     glfwTerminate();                           //结束线程，释放资源
     return 0;
