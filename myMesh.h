@@ -34,6 +34,10 @@ public:
 	void Draw(myShader shader) {
 		shader.setBool("material.diffuse_texture_use", false);
 		shader.setBool("material.specular_texture_use", false);
+		shader.setBool("material.ambient_texture_use", false);
+		shader.setBool("material.normal_texture_use", false);
+		shader.setBool("material.metallic_texture_use", false);
+		shader.setBool("material.roughness_texture_use", false);
 		for (unsigned int i = 0; i < texture_struct.size(); i++)
 		{
 			glActiveTexture(GL_TEXTURE0 + i);
@@ -41,6 +45,7 @@ public:
 			shader.setInt(("material." + name).c_str(), i);
 			shader.setBool(("material." + name + "_use").c_str(), true);
 			glBindTexture(GL_TEXTURE_2D, texture_struct[i].id);
+			//cout << name << endl;
 		}
 		glActiveTexture(GL_TEXTURE0);
 
@@ -71,6 +76,12 @@ public:
 		// 顶点法线
 		glEnableVertexAttribArray(2);
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(vertice), (void*)offsetof(vertice, normal));
+		// 顶点切线
+		glEnableVertexAttribArray(3);
+		glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(vertice), (void*)offsetof(vertice, tangent));
+		// 顶点副切线
+		glEnableVertexAttribArray(4);
+		glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(vertice), (void*)offsetof(vertice, bitangent));
 
 		glBindVertexArray(0);
 	}
@@ -135,4 +146,59 @@ private:
 
 	unsigned int VAO, VBO, EBO;
 
+};
+
+float quadVertices[] = {
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		-1.0f, -1.0f,  0.0f, 0.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+		 1.0f,  1.0f,  1.0f, 1.0f
+};
+
+float skyboxVertices[] = {
+	// positions          
+	-1.0f,  1.0f, -1.0f,
+	-1.0f, -1.0f, -1.0f,
+	 1.0f, -1.0f, -1.0f,
+	 1.0f, -1.0f, -1.0f,
+	 1.0f,  1.0f, -1.0f,
+	-1.0f,  1.0f, -1.0f,
+
+	-1.0f, -1.0f,  1.0f,
+	-1.0f, -1.0f, -1.0f,
+	-1.0f,  1.0f, -1.0f,
+	-1.0f,  1.0f, -1.0f,
+	-1.0f,  1.0f,  1.0f,
+	-1.0f, -1.0f,  1.0f,
+
+	 1.0f, -1.0f, -1.0f,
+	 1.0f, -1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f, -1.0f,
+	 1.0f, -1.0f, -1.0f,
+
+	-1.0f, -1.0f,  1.0f,
+	-1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f, -1.0f,  1.0f,
+	-1.0f, -1.0f,  1.0f,
+
+	-1.0f,  1.0f, -1.0f,
+	 1.0f,  1.0f, -1.0f,
+	 1.0f,  1.0f,  1.0f,
+	 1.0f,  1.0f,  1.0f,
+	-1.0f,  1.0f,  1.0f,
+	-1.0f,  1.0f, -1.0f,
+
+	-1.0f, -1.0f, -1.0f,
+	-1.0f, -1.0f,  1.0f,
+	 1.0f, -1.0f, -1.0f,
+	 1.0f, -1.0f, -1.0f,
+	-1.0f, -1.0f,  1.0f,
+	 1.0f, -1.0f,  1.0f
 };

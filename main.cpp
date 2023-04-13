@@ -12,6 +12,10 @@ double lastX = 0, lastY = 0;
 bool firstMouse = true;
 myCamera* camera;
 
+// Delta
+GLfloat deltaTime = 0.0f;
+GLfloat lastFrame = 0.0f;
+
 /*重构窗口大小*/
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -25,7 +29,7 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    float cameraSpeed = 0.05f; // adjust accordingly
+    float cameraSpeed = 0.002f / deltaTime; // adjust accordingly
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera->cameraPos += cameraSpeed * camera->cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -114,35 +118,23 @@ int main()
     myShader shader = myShader("shader/standard.vsh", "shader/standard.fsh", "shader/standard.gsh");
     myShader shader_post = myShader("shader/postprocess.vsh", "shader/postprocess.fsh");
     myShader shader_cubemap = myShader("shader/cubemap.vsh", "shader/cubemap.fsh");
+    myShader shader_hdr = myShader("shader/hdr.vsh", "shader/hdr.fsh");
+    myShader shader_hdr_convolution = myShader("shader/hdr.vsh", "shader/hdr_convolution.fsh");
+    myShader shader_hdr_mipmap = myShader("shader/hdr.vsh", "shader/hdr_mipmap.fsh");
+    myShader shader_lut = myShader("shader/lut.vsh", "shader/lut.fsh");
     myShader shader_dir_light = myShader("shader/dir_light.vsh", "shader/dir_light.fsh");
     myShader shader_point_light = myShader("shader/point_light.vsh", "shader/point_light.fsh", "shader/point_light.gsh");
+    myShader shader_bloom = myShader("shader/bloom.vsh", "shader/bloom.fsh");
 
     /*模型设置*/
-    myModel* models = new myModel("D:/blender/nanosuit/nanosuit2.obj", false);
+    //myModel* models = new myModel("C:/Users/52708/Documents/Megascans Library/Downloaded/3d/props_hardware_vgyidfpaw/vgyidfpaw.obj", false);
+    //myModel* models = new myModel("D:/blender/nanosuit/nanosuit2.obj", false);
+    //myModel* models = new myModel("D:/cg_optix/optix_study/x64/Debug/models/sponza/sponza_small.obj", false);
+    //myModel* models = new myModel("D:/blender/Cerberus_by_Andrew_Maximov/Cerberus_LP.FBX", false);
+    myModel* models = new myModel("D:/blender/DamagedHelmet/DamagedHelmet.obj", false);
 
     /*相机设置*/
     camera = new myCamera(glm::vec3(0.0f, 4.0f, 10.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), Euler{ 0.0f,-90.0f,0.0f }, 45.0f);
-
-    /*cubemap设置*/
-    vector<std::string> faces
-    {
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/right.jpg",
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/left.jpg",
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/top.jpg",
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/bottom.jpg",
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/front.jpg",
-        "D:/cg_opengl/OpenglRenderer/resources/cubemap/back.jpg"
-    };    
-    /*天空盒的纹理模型设置*/
-    unsigned int cubemapTexture = loadCubemap(faces);
-    unsigned int skyboxVAO, skyboxVBO;
-    glGenVertexArrays(1, &skyboxVAO);
-    glGenBuffers(1, &skyboxVBO);
-    glBindVertexArray(skyboxVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     /*屏幕的纹理模型设置*/
     unsigned int quadVAO, quadVBO;
@@ -160,19 +152,222 @@ int main()
     glGenFramebuffers(1, &framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
     /*帧纹理设置，将帧缓冲的颜色信息写入*/
-    unsigned int textureColorbuffer;
-    glGenTextures(1, &textureColorbuffer);
-    glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenWidth, screenHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+    unsigned int textureColorbuffer[2];
+    glGenTextures(2, textureColorbuffer);
+    for (unsigned int i = 0; i < 2; i++) {
+        glBindTexture(GL_TEXTURE_2D, textureColorbuffer[i]);
+        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenWidth, screenHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, screenWidth, screenHeight, 0, GL_RGB, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, textureColorbuffer[i], 0);
+    }
+    GLuint attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
     /*渲染缓冲设置，接收深度值和模板值*/
     unsigned int rbo;
     glGenRenderbuffers(1, &rbo);
     glBindRenderbuffer(GL_RENDERBUFFER, rbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, screenWidth, screenHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    /*环境贴图模型设置*/
+    unsigned int skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    /*六面cubemap设置*/
+    vector<std::string> faces
+    {
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/right.jpg",
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/left.jpg",
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/top.jpg",
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/bottom.jpg",
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/front.jpg",
+        "D:/cg_opengl/OpenglRenderer/resources/cubemap/back.jpg"
+    };
+    unsigned int realCubemap = loadCubemap(faces);
+
+    /*球状HDR的设置*/
+    unsigned int captureFBO, captureRBO;
+    glGenFramebuffers(1, &captureFBO);
+    glGenRenderbuffers(1, &captureRBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 1024, 1024);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+    unsigned int hdrCubemap;
+    glGenTextures(1, &hdrCubemap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F,
+            1024, 1024, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    /*将球状贴图读成cubemap*/
+    //unsigned int hdrTexture = loadHDR("D:/mitsuba3_project/Part3/0.hdr");
+    unsigned int hdrTexture = loadHDR("D:/mitsuba2_project/ball/0.hdr");
+    glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+    glm::mat4 captureViews[] =
+    {
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+       glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+    };
+    shader_hdr.use();
+    shader_hdr.setInt("equirectangularMap", 0);
+    shader_hdr.setMatrix("projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, hdrTexture);
+    glViewport(0, 0, 1024, 1024);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        shader_hdr.setMatrix("view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, hdrCubemap, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glBindVertexArray(skyboxVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /*预处理，漫反射项的卷积*/
+    const int convolution_size = 32;
+    unsigned int hdrCubemap_convolution;
+    glGenTextures(1, &hdrCubemap_convolution);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap_convolution);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F,
+            convolution_size, convolution_size, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, convolution_size, convolution_size);
+    glViewport(0, 0, convolution_size, convolution_size);
+    shader_hdr_convolution.use();
+    shader_hdr_convolution.setInt("environmentMap", 0);
+    shader_hdr_convolution.setMatrix("projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        shader_hdr_convolution.setMatrix("view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, hdrCubemap_convolution, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glBindVertexArray(skyboxVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /*预处理，镜面反射项的卷积*/
+    unsigned int hdrCubemap_mipmap;
+    glGenTextures(1, &hdrCubemap_mipmap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap_mipmap);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
+    shader_hdr_mipmap.use();
+    shader_hdr_mipmap.setInt("environmentMap", 0);
+    shader_hdr_mipmap.setMatrix("projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    unsigned int maxMipLevels = 5;
+    for (unsigned int mip = 0; mip < maxMipLevels; ++mip)
+    {
+        unsigned int mipWidth = 128 * std::pow(0.5, mip);
+        unsigned int mipHeight = 128 * std::pow(0.5, mip);
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+        glViewport(0, 0, mipWidth, mipHeight);
+
+        float roughness = (float)mip / (float)(maxMipLevels - 1);
+        shader_hdr_mipmap.setFloat("roughness", roughness);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            shader_hdr_mipmap.setMatrix("view", captureViews[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, hdrCubemap_mipmap, mip);
+
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glBindVertexArray(skyboxVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /*Lut预计算*/
+    unsigned int brdfLUTTexture;
+    glGenTextures(1, &brdfLUTTexture);
+
+    glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUTTexture, 0);
+
+    glViewport(0, 0, 512, 512);
+    shader_lut.use();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    /*泛光模糊缓冲*/
+    GLuint pingpongFBO[2];
+    GLuint pingpongBuffer[2];
+    glGenFramebuffers(2, pingpongFBO);
+    glGenTextures(2, pingpongBuffer);
+    for (GLuint i = 0; i < 2; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+        glBindTexture(GL_TEXTURE_2D, pingpongBuffer[i]);
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGB16F, screenWidth, screenHeight, 0, GL_RGB, GL_FLOAT, NULL
+        );
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0
+        );
+    }
 
     /*平行光源阴影缓冲设置*/
     GLuint depthMapFBO;
@@ -216,9 +411,12 @@ int main()
     glReadBuffer(GL_NONE);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    glm::vec3 lightPos = glm::vec3(0, 8, 8);
+    glm::vec3 lightPos = glm::vec3(0, 8, 5);
     while (!glfwWindowShouldClose(window))
     {
+        GLfloat currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
         processInput(window);
 
         /////////////////////////这里开始平行光源视角渲染
@@ -272,12 +470,12 @@ int main()
         shader.setFloat("time", glfwGetTime());
         /*shader光源设置*/
         shader.setVec3("dl[0].dir", glm::vec3(-1, -1, -1));
-        shader.setVec3("dl[0].color", glm::vec3(0.0f, 0.0f, 2.0f));
+        shader.setVec3("dl[0].color", glm::vec3(0.0f, 0.0f, 0.0f));
         shader.setVec3("pl[0].pos", lightPos);
-        shader.setVec3("pl[0].color", glm::vec3(2.0f, 0.0f, 0.0f));
+        shader.setVec3("pl[0].color", glm::vec3(0.0f, 0.0f, 0.0f));
         shader.setFloat("pl[0].constant", 1.0f);
-        shader.setFloat("pl[0].linear", 0.1f);
-        shader.setFloat("pl[0].quadratic", 0.0f);
+        shader.setFloat("pl[0].linear", 0.01f);
+        shader.setFloat("pl[0].quadratic", 0.002f);
 
         /*shader相机设置*/
         shader.setVec3("cameraPos", camera->cameraPos);
@@ -293,20 +491,26 @@ int main()
         shader.setMatrix("projection", projection); 
 
         /*shader材质参数设置*/
-        shader.setVec3("material.ambient", glm::vec3(0.25f, 0.25f, 0.25f));
-        shader.setVec4("material.diffuse", glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
-        shader.setVec3("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
-        shader.setFloat("material.reflects", 0.0f);
-        shader.setFloat("material.shininess_n", 64.0f);
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-        shader.setInt("cubeTexture", 4);
-        glActiveTexture(GL_TEXTURE5);
+        shader.setVec4("material.diffuse", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+        shader.setVec3("material.specular", glm::vec3(0.6f, 0.6f, 0.6f));
+        shader.setFloat("material.roughness", 0.1f);
+        shader.setFloat("material.metallic", 1.0f);
+        shader.setFloat("material.ambient", 0.7f);
+        glActiveTexture(GL_TEXTURE7);
         glBindTexture(GL_TEXTURE_2D, depthMap);
-        shader.setInt("dir_shadowMap", 5);
-        glActiveTexture(GL_TEXTURE6);
+        shader.setInt("dir_shadowMap", 7);
+        glActiveTexture(GL_TEXTURE8);
         glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-        shader.setInt("point_shadowMap", 6);
+        shader.setInt("point_shadowMap", 8);
+        glActiveTexture(GL_TEXTURE9);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap_convolution);
+        shader.setInt("diffuse_convolution", 9);
+        glActiveTexture(GL_TEXTURE10);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap_mipmap);
+        shader.setInt("reflect_mipmap", 10);
+        glActiveTexture(GL_TEXTURE11);
+        glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+        shader.setInt("reflect_lut", 11);
         shader.setMatrix("lightSpaceMatrix", lightSpaceMatrix);
         shader.setFloat("far_plane", far);
         models->Draw(shader);
@@ -320,20 +524,44 @@ int main()
         shader_cubemap.setMatrix("view", view);
         shader_cubemap.setMatrix("projection", projection);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, hdrCubemap_mipmap);
         glBindVertexArray(skyboxVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
-        /////////////////////////这里开始将渲染结果输出到屏幕上
+        /////////////////////////泛光的高斯模糊
         glDepthFunc(GL_LESS);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDisable(GL_DEPTH_TEST);
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        shader_post.setInt("screenTexture", 0);
+        GLboolean horizontal = true, first_iteration = true;
+        GLuint amount = 0;
+        shader_bloom.use();
+        for (GLuint i = 0; i < amount; i++)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+            shader_bloom.setBool("horizontal", horizontal);
+            glBindTexture(GL_TEXTURE_2D, first_iteration ? textureColorbuffer[1] : pingpongBuffer[!horizontal]);
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            horizontal = !horizontal;
+            if (first_iteration)
+                first_iteration = false;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        /////////////////////////这里开始将渲染结果输出到屏幕上
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
         shader_post.use();
+        shader_post.setInt("screenTexture", 0);
+        shader_post.setInt("bloomTexture", 1);
+        shader_post.setFloat("exposure", 1.0f);
         glBindVertexArray(quadVAO);
-        glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureColorbuffer[0]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, pingpongBuffer[0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
 

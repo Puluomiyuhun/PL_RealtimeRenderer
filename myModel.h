@@ -112,6 +112,14 @@ private:
                 vector.y = mesh->mNormals[i].y;
                 vector.z = mesh->mNormals[i].z;
                 vertex.normal = vector;
+                vector.x = mesh->mTangents[i].x;
+                vector.y = mesh->mTangents[i].y;
+                vector.z = mesh->mTangents[i].z;
+                vertex.tangent = vector;
+                vector.x = mesh->mBitangents[i].x;
+                vector.y = mesh->mBitangents[i].y;
+                vector.z = mesh->mBitangents[i].z;
+                vertex.bitangent = vector;
             }
             // texture coordinates
             if (mesh->mTextureCoords[0]) // does the mesh contain texture coordinates?
@@ -164,9 +172,15 @@ private:
         // 3. normal maps
         std::vector<myTexture> normalMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, "normal_texture");
         textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
-        // 4. height maps
-        std::vector<myTexture> heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "height_texture");
+        // 4. ambient maps
+        std::vector<myTexture> heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "ambient_texture");
         textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
+        // 3. normal maps
+        std::vector<myTexture> roughnessMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, "roughness_texture");
+        textures.insert(textures.end(), roughnessMaps.begin(), roughnessMaps.end());
+        // 4. ambient maps
+        std::vector<myTexture> metallicMaps = loadMaterialTextures(material, aiTextureType_METALNESS, "metallic_texture");
+        textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
 
         // return a mesh object created from the extracted mesh data
         return myMesh(vertices, indices, textures);

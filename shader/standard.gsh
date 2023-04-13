@@ -6,11 +6,13 @@ in VS_OUT {
    vec3 normal;
    vec2 texcoord;
    vec3 FragPos;  
+   mat3 TBN;
 } gs_in[];
 
 out vec3 f_normal;
 out vec2 f_texcoord;
 out vec3 f_FragPos; 
+out mat3 f_TBN;
 
 uniform float time;
 
@@ -36,16 +38,19 @@ void main() {
     f_normal = gs_in[0].normal;
     f_texcoord = gs_in[0].texcoord;
     f_FragPos = gs_in[0].FragPos;
+    f_TBN = gs_in[0].TBN;
     EmitVertex();
     gl_Position = explode(gl_in[1].gl_Position, normal);
     f_normal = gs_in[1].normal;
     f_texcoord = gs_in[1].texcoord;
     f_FragPos = gs_in[1].FragPos;
+    f_TBN = gs_in[1].TBN;
     EmitVertex();
     gl_Position = explode(gl_in[2].gl_Position, normal);
     f_normal = gs_in[2].normal;
     f_texcoord = gs_in[2].texcoord;
     f_FragPos = gs_in[2].FragPos;
+    f_TBN = gs_in[2].TBN;
     EmitVertex();
     EndPrimitive();
 }
