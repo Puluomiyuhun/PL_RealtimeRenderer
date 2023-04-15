@@ -25,13 +25,22 @@ public:
 		Cube(pos_offset, size, tex);
 	}
 
-	myMesh(vector<vertice> vertices, vector<unsigned int> indices, vector<myTexture> textures)
+	myMesh(string str, vector<vertice> vertices, vector<unsigned int> indices, vector<myTexture> textures)
 	{
+		this->name = str;
 		this->vertice_struct = vertices;
 		this->indice_struct = indices;
 		this->texture_struct = textures;
+		this->pos = glm::vec3(0, 0, 0);
+		this->rot = glm::vec3(0, 0, 0);
+		this->scale = glm::vec3(1, 1, 1);
 	}
 	void Draw(myShader shader) {
+		shader.setVec4("material.diffuse", diffuse);
+		shader.setVec3("material.specular", specular);
+		shader.setFloat("material.roughness", roughness);
+		shader.setFloat("material.metallic", metallic);
+		shader.setFloat("material.ambient", ambient);
 		shader.setBool("material.diffuse_texture_use", false);
 		shader.setBool("material.specular_texture_use", false);
 		shader.setBool("material.ambient_texture_use", false);
@@ -85,6 +94,21 @@ public:
 
 		glBindVertexArray(0);
 	}
+public:
+	string name;
+	vector<vertice> vertice_struct;
+	vector<unsigned int> indice_struct;
+
+	unsigned int VAO, VBO, EBO;
+	int use_shader = 0;
+
+	glm::vec3 pos, rot, scale;
+	vector<myTexture> texture_struct;
+	glm::vec4 diffuse;
+	glm::vec3 specular;
+	float roughness;
+	float metallic;
+	float ambient = 0.8f;
 
 private:
 	void Cube(glm::vec3 pos_offset, glm::vec3 size, myTexture tex) {
@@ -138,13 +162,6 @@ private:
 			indice_struct.push_back(i);
 		texture_struct.push_back(tex);
 	}
-
-private:
-	vector<vertice> vertice_struct;
-	vector<unsigned int> indice_struct;
-	vector<myTexture> texture_struct;
-
-	unsigned int VAO, VBO, EBO;
 
 };
 

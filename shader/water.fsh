@@ -14,6 +14,7 @@ uniform samplerCube diffuse_convolution;
 uniform samplerCube reflect_mipmap;
 uniform sampler2D reflect_lut;
 uniform float far_plane;
+uniform float totalTime;
 
 struct Material {
     vec4 diffuse;
@@ -146,6 +147,28 @@ float cal_point_shadow()
     return shadow;
 }
 
+vec3 BlendAngleCorrectedNormals(vec3 n1, vec3 n2)
+{
+    return normalize(vec3(n1.xy + n2.xy, n1.z));
+}
+
+vec3 GetBaseNormal()
+{
+    vec2 texcoord = f_texcoord * vec2(2, 2) + totalTime * vec2(-0.0006,-0.0004);
+    vec3 normal = vec3(texture(material.normal_texture, texcoord));
+    normal = normalize(2 * normal - 1);
+    return normal;
+}
+
+vec3 GetAdditionNormal(float level)
+{
+    float time = sin(f_FragPos.x / 150 + 0.01 * totalTime);
+    vec2 texcoord = f_texcoord * vec2(1, 1) * level + time * vec2(-0.0006,-0.0004) * level;
+    vec3 normal = vec3(texture(material.normal_texture, texcoord));
+    normal = normalize(2 * normal - 1);
+    return normal;
+}
+
 void main()
 {
     FragColor = vec4(0,0,0,1);
@@ -173,8 +196,11 @@ void main()
 
     vec3 N = normalize(f_normal);
     if(material.normal_texture_use == true) {
-        N = texture(material.normal_texture, f_texcoord).rgb;
-        N = normalize(N * 2.0 - 1.0);
+        N = GetBaseNormal();
+        vec3 N_1 = GetAdditionNormal(3);
+        //vec3 N_2 = GetAdditionNormal(10);
+        N = BlendAngleCorrectedNormals(N,N_1);
+        //N = BlendAngleCorrectedNormals(N,N_2);
         N = normalize(f_TBN * N);
     }
 
@@ -237,8 +263,9 @@ void main()
     vec3 prefilteredColor = textureLod(reflect_mipmap, R,  roughness_ * 4).rgb;
     vec2 envBRDF  = texture(reflect_lut, vec2(max(dot(N, V), 0.0), roughness_)).rg;
     vec3 environment_reflect = prefilteredColor * (F0 * envBRDF.x + envBRDF.y);
-    FragColor.rgb += ambient_ * (environment_diffuse + environment_reflect);
-    FragColor.a = diffuse_.a;
+    FragColor.rgb += ambient_ * (environment_diffuse + specular_ * environment_reflect);
+    FragColor.rgb *= fresnelSchlick(dot(V,normalize(f_normal)),F0);
+    FragColor.a = fresnelSchlick(dot(V,normalize(f_normal)),F0).r + 0.3;
 
     float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
     if(brightness > 1.0)

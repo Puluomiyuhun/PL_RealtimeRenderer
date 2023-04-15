@@ -5,17 +5,19 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <string>
 #include <fstream>
 #include <sstream>
 #include <iostream>
 
+using namespace std;
 
 class myShader
 {
 public:
     unsigned int ID;
     bool haveG;
+    string name;
+    myShader(){}
     // 构造器读取并构建着色器
     myShader(const char* vertexPath, const char* fragmentPath) {
         haveG = false;
@@ -198,6 +200,9 @@ public:
     // 使用/激活程序
     void use() {
         glUseProgram(ID);
+    }
+    void setName(string str) {
+        name = str;
     }
     // uniform工具函数
     void setBool(const std::string& name, bool value) const{
