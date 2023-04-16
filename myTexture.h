@@ -13,6 +13,10 @@ struct myTexture {
     string type;
     string path;
 };
+struct myHDR {
+    unsigned int id;
+    int type;
+};
 
 unsigned int loadTexture(const char* texturePath) {
     unsigned int texture;

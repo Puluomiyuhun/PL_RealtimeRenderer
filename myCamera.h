@@ -12,7 +12,8 @@ struct Euler {
 
 class myCamera {
 public:
-	myCamera(glm::vec3 Pos, glm::vec3 Front, glm::vec3 Up, Euler eu, double fov_) {
+	myCamera(string str, glm::vec3 Pos, glm::vec3 Front, glm::vec3 Up, Euler eu, double fov_) {
+		name = str;
 		cameraPos = Pos;
 		cameraFront = Front;
 		cameraUp = Up;
@@ -27,4 +28,6 @@ public:
 	glm::vec3 cameraUp;
 	Euler cameraEuler;
 	float fov = 45.0f;
+
+	string name;
 };

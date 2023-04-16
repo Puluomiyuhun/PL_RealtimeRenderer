@@ -31,10 +31,37 @@ public:
     string directory;
     bool gammaCorrection;
 
-    // constructor, expects a filepath to a 3D model.
+    string name;
+    glm::vec3 pos, rot, scale;
+
     myModel(string const& path, bool gamma = false) : gammaCorrection(gamma)
     {
+        pos = glm::vec3(0, 0, 0);
+        rot = glm::vec3(0, 0, 0);
+        scale = glm::vec3(1, 1, 1);
         loadModel(path);
+        int begin = 0;
+        for (int i = path.length() - 1; i >= 0; i--) {
+            if (path[i] == '/' || path[i] == '\\') {
+                begin = i + 1;
+                break;
+            }
+        }
+        name = path.substr(begin, path.length() - begin - 4);
+        Setup();
+    }
+
+    myModel(string const& path, bool gamma, glm::vec3 p, glm::vec3 r, glm::vec3 s) : gammaCorrection(gamma), pos(p), rot(r), scale(s)
+    {
+        loadModel(path);
+        int begin = 0;
+        for (int i = path.length() - 1; i >= 0; i--) {
+            if (path[i] == '/' || path[i] == '\\') {
+                begin = i + 1;
+                break;
+            }
+        }
+        name = path.substr(begin, path.length() - begin - 4);
         Setup();
     }
 
@@ -162,7 +189,6 @@ private:
         // diffuse: texture_diffuseN
         // specular: texture_specularN
         // normal: texture_normalN
-
         // 1. diffuse maps
         vector<myTexture> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, "diffuse_texture");
         textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
@@ -182,8 +208,22 @@ private:
         std::vector<myTexture> metallicMaps = loadMaterialTextures(material, aiTextureType_METALNESS, "metallic_texture");
         textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
 
+        myMesh mesh_ = myMesh(mesh->mName.data, vertices, indices, textures);
+
+        aiColor4D color;
+        float factor;
+        aiGetMaterialColor(material, AI_MATKEY_COLOR_DIFFUSE, &color);
+        mesh_.diffuse = glm::vec4(color.r, color.g, color.b, color.a);
+        aiGetMaterialColor(material, AI_MATKEY_COLOR_SPECULAR, &color);
+        mesh_.specular = glm::vec3(color.r, color.g, color.b);
+        aiGetMaterialFloat(material, AI_MATKEY_METALLIC_FACTOR, &factor);
+        if (factor < 0 || factor > 1) factor = 0;
+        mesh_.metallic = factor;
+        aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, &factor);
+        if (factor < 0 || factor > 1) factor = 0;
+        mesh_.roughness = factor;
         // return a mesh object created from the extracted mesh data
-        return myMesh(vertices, indices, textures);
+        return mesh_;
     }
 
     // checks all material textures of a given type and loads the textures if they're not loaded yet.
@@ -224,8 +264,8 @@ private:
 unsigned int TextureFromFile(const char* path, const string& directory, bool gamma)
 {
     string filename = string(path);
-    filename = directory + '/' + filename;
-
+    if (filename[1] != ':')
+        filename = directory + '/' + filename;
     unsigned int textureID;
     glGenTextures(1, &textureID);
 
