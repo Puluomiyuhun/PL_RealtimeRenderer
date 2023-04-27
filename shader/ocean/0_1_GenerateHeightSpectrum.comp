@@ -1,0 +1,59 @@
+#version 440 core
+
+const int LOCAL_WORK_GROUP_SIZE = 32;
+
+const int L = 512;
+const int N = 512;
+const float G = 9.81;
+const float PI = 3.141592653589;
+
+layout(binding = 0 ,rg32f) uniform image2D u_imageH0;
+layout(binding = 1 ,rg32f) uniform image2D u_imageH0Conj;
+layout(binding = 2 ,rg32f) uniform image2D u_imageOut;
+
+uniform float time;
+
+layout(local_size_x = LOCAL_WORK_GROUP_SIZE, local_size_y = LOCAL_WORK_GROUP_SIZE, local_size_z = 1) in;
+
+float dispersion(vec2 k);
+vec2 ComplexMultiply(vec2 complex_1, vec2 complex_2);
+
+void main()
+{
+	//通过gl_GlobalInvocationID来得知当前执行单元在全局工作组中的位置
+	ivec2 storePos = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
+
+	//vec2 k = vec2(2.0f * PI * (storePos.x - N/2) / L, 2.0f * PI * (storePos.y - N/2) / L);
+	vec2 k = vec2(2.0f * PI * storePos.x / N - PI, 2.0f * PI * storePos.y / N - PI);
+
+	//根据位置storePos在贴图中采样得到数据
+	vec2 h0 = imageLoad(u_imageH0, storePos).xy;
+	vec2 h0Conj = imageLoad(u_imageH0Conj, storePos).xy;
+
+	float omegat = dispersion(k) * time;
+	float c = cos(omegat);
+	float s = sin(omegat);
+	
+	vec2 e1 = vec2(c,s);
+	vec2 e2 = vec2(c,-s);
+
+    vec2 h1 = ComplexMultiply(h0, e1);
+	vec2 h2 = ComplexMultiply(h0Conj, e2);
+
+	vec2 HTilde = h1 + h2;
+
+	//将算出来的高度值存储到贴图当中
+	imageStore(u_imageOut, storePos, vec4(HTilde, 0.0, 0.0));
+}
+
+float dispersion(vec2 k)
+{
+	return sqrt(G * length(k));
+}
+
+vec2 ComplexMultiply(vec2 complex_1, vec2 complex_2)
+{
+	float real = complex_1.x * complex_2.x + complex_1.y * complex_2.y * -1.0;
+	float imag = complex_1.x * complex_2.y + complex_1.y * complex_2.x;
+	return vec2(real, imag);
+}

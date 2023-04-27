@@ -19,6 +19,63 @@ public:
     string name;
     myShader(){}
     // 构造器读取并构建着色器
+    myShader(const char* computePath) {
+        haveG = false;
+        std::string computeCode;
+        std::ifstream cShaderFile;
+        // 保证ifstream对象可以抛出异常：
+        cShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+        try
+        {
+            // 打开文件
+            cShaderFile.open(computePath);
+            std::stringstream cShaderStream;
+            // 读取文件的缓冲内容到数据流中
+            cShaderStream << cShaderFile.rdbuf();
+            // 关闭文件处理器
+            cShaderFile.close();
+            // 转换数据流到string
+            computeCode = cShaderStream.str();
+        }
+        catch (std::ifstream::failure e)
+        {
+            std::cout << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" << std::endl;
+        }
+        const char* cShaderCode = computeCode.c_str();
+
+        // 2. 编译着色器
+        unsigned int compute;
+        int success;
+        char infoLog[512];
+
+        // 顶点着色器
+        compute = glCreateShader(GL_COMPUTE_SHADER);
+        glShaderSource(compute, 1, &cShaderCode, NULL);
+        glCompileShader(compute);
+        // 打印编译错误（如果有的话）
+        glGetShaderiv(compute, GL_COMPILE_STATUS, &success);
+        if (!success)
+        {
+            glGetShaderInfoLog(compute, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+        };
+
+        // 着色器程序
+        ID = glCreateProgram();
+        glAttachShader(ID, compute);
+        glLinkProgram(ID);
+        // 打印连接错误（如果有的话）
+        glGetProgramiv(ID, GL_LINK_STATUS, &success);
+        if (!success)
+        {
+            glGetProgramInfoLog(ID, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED...\n" << infoLog << std::endl;
+        }
+
+        // 删除着色器，它们已经链接到我们的程序中了，已经不再需要了
+        glDeleteShader(compute);
+    }
+    // 构造器读取并构建着色器
     myShader(const char* vertexPath, const char* fragmentPath) {
         haveG = false;
         std::string vertexCode;

@@ -332,7 +332,9 @@ static void ShowSceneObj() {
             for (int i = 0; i < scene.models.size(); i++) {
                 char tmp[10] = "";
                 char goal[30];
-                printf_s(tmp, "%d_%d", i, -1);
+                tmp[0] = i % 10;
+                tmp[1] = (i / 10) % 10;
+                tmp[2] = (i / 100) % 10;
                 const char* pre = ICON_FA_CUBES "     \0";
                 goal[0] = '\0';
                 strcpy(goal, pre);
@@ -700,19 +702,26 @@ static void ShowNodeProperties() {
             ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
             ImGui::Text("Environment Map:");
             ImGui::ColorEdit3("Map", (float*)&clear_color);
-            ImGui::Image(NULL, ImVec2(120, 120), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 1));
+            ImGui::Image((GLuint*)scene.hdrs.id, ImVec2(120, 120), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 1));
             ImGui::Separator();
-            ImGui::Text("Post Processing:");
+            ImGui::Checkbox("Ocean", &scene.ocean->show);
+            ImGui::Text("Color:");
+            ImGui::ColorEdit3("ocean_diffuse", (float*)&scene.ocean->diffuse);
+            ImGui::DragFloat("ocean_specular", &scene.ocean->specular, 0.1, 0, 10);
+            ImGui::DragFloat("ocean_transparency", &scene.ocean->transparency, 0.1, 0, 1);
+            ImGui::Separator();
+            /*ImGui::Text("Post Processing:");
             ImGui::Checkbox("Gaussian Filter", &f);
             ImGui::Checkbox("Laplace Filter", &f);
             ImGui::SliderFloat("Saturation", &v, 0, 1);
             ImGui::SliderFloat("Lightness", &v, 0, 1);
             ImGui::Separator();
-            ImGui::EndTabItem();
+            ImGui::EndTabItem();*/
             /*const char* items[] = {"Directional", "Point"};
             static int light_type_current = 0;
             ImGui::Combo("Type", &light_type_current, items, 2);
             ImGui::EndTabItem();*/
+            ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
     }
@@ -745,7 +754,7 @@ int main()
     glfwSetErrorCallback(glfw_error_callback);
     /*opengl窗口初始化*/
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);                                //主版本：3
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);                                //主版本：4
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);                                //次版本：3
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);                //设置为核心模式
     glfwWindowHint(GLFW_MAXIMIZED, true);

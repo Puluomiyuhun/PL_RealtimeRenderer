@@ -1,0 +1,134 @@
+#version 440 core
+
+const int LOCAL_WORK_GROUP_SIZE = 32;
+
+const int L = 512;
+const int N = 512;
+const float PI = 3.141592653589;
+
+uniform int u_steps;
+ 
+layout (binding = 0, rg32f) uniform image2D u_imageIn; 
+layout (binding = 1, rg32f) uniform image2D u_imageOut;
+ 
+layout (binding = 2, r32f) uniform image1D u_imageIndices;
+ 
+//如果一个变量被声明为shared，那么它将被保存到特定的位置，从而对同一个本地工作组内的所有计算着色器请求可见,通常访问共享shared变量的性能会远远好于访问图像或者着色器存储缓存（例如主内存）的性能
+shared vec2 sharedStore[N];
+ 
+layout (local_size_x = LOCAL_WORK_GROUP_SIZE * 8, local_size_y = 1, local_size_z = 1) in;
+
+vec2 ComplexMultiply(vec2 complex_1, vec2 complex_2);
+vec2 RootOfUnitVector(int n, int k);
+
+void main()
+{
+	int xIndex = int(gl_GlobalInvocationID.x);
+	int yIndex = int(gl_GlobalInvocationID.y);
+ 
+	int leftStoreIndex = 2 * xIndex;
+	int rightStoreIndex = 2 * xIndex + 1;
+ 
+	//读取索引（每一组有两个索引例如（0,4））
+	int leftLoadIndex = int(imageLoad(u_imageIndices, leftStoreIndex).r);
+	int rightLoadIndex = int(imageLoad(u_imageIndices, rightStoreIndex).r);
+
+	ivec2 leftLoadPos;
+	ivec2 rightLoadPos;
+
+	leftLoadPos = ivec2(leftLoadIndex, yIndex);
+	rightLoadPos = ivec2(rightLoadIndex, yIndex);
+
+	ivec2 leftStorePos;
+	ivec2 rightStorePos;
+ 
+	leftStorePos = ivec2(leftStoreIndex, yIndex);
+	rightStorePos = ivec2(rightStoreIndex, yIndex);
+ 
+	//从贴图中读取数据
+	vec2 leftValue = imageLoad(u_imageIn, leftLoadPos).xy;
+	vec2 rightValue = imageLoad(u_imageIn, rightLoadPos).xy;
+	//放入到共享缓存中
+	sharedStore[leftStoreIndex] = leftValue;
+	sharedStore[rightStoreIndex] = rightValue;
+ 
+	//确保所有数据都存储完毕（否则后续逻辑将无法读到所需的数据，即要保证时序）
+	memoryBarrierShared();
+	barrier();
+ 
+	int numberButterfliesInSection = 1;
+ 
+	int currentSection = xIndex;
+	int currentButterfly = 0;
+ 
+	//计算FFT
+	for (int currentStep = 0; currentStep < u_steps; currentStep++)
+	{	
+		//根据位置来获取该组所需的两个索引
+		int leftIndex = currentButterfly + currentSection * numberButterfliesInSection * 2;
+		int rightIndex = currentButterfly + numberButterfliesInSection + currentSection * numberButterfliesInSection * 2;
+		//从共享缓存中获得数据
+		leftValue = sharedStore[leftIndex];
+		rightValue = sharedStore[rightIndex];
+			 						
+		vec2 currentW = RootOfUnitVector(numberButterfliesInSection * 2, currentButterfly);
+	
+		vec2 multiply;
+		vec2 addition;
+		vec2 subtraction;
+ 
+		multiply = ComplexMultiply(currentW, rightValue);	
+		
+		addition = leftValue + multiply;
+		subtraction = leftValue - multiply; 
+ 
+		if(currentStep == u_steps-1)
+		{
+			sharedStore[leftIndex] = -addition;
+			sharedStore[rightIndex] = -subtraction;
+		}
+		else
+		{
+			sharedStore[leftIndex] = addition;
+			sharedStore[rightIndex] = subtraction;
+		}
+				
+		//确保所有数据计算并存储完毕	
+		memoryBarrierShared();
+ 
+		//根据蝴蝶算法来改变参数	
+		numberButterfliesInSection *= 2;
+ 
+		currentSection /= 2;
+		currentButterfly = xIndex % numberButterfliesInSection;
+ 
+		//确保所有的计算着色器都计算完毕
+		barrier();
+	}
+
+	int x1 = leftStoreIndex - N/2;
+	int x2 = rightStoreIndex - N/2;
+	int c1 = abs(x1)%2==0?1:-1;
+	int c2 = abs(x2)%2==0?1:-1;
+
+	imageStore(u_imageOut, leftStorePos, vec4(c1 * sharedStore[leftStoreIndex], 0.0, 0.0));
+	imageStore(u_imageOut, rightStorePos, vec4(c2 * sharedStore[rightStoreIndex], 0.0, 0.0));
+}
+
+vec2 ComplexMultiply(vec2 complex_1, vec2 complex_2)
+{
+	float real = complex_1.x * complex_2.x + complex_1.y * complex_2.y * -1.0;
+	float imag = complex_1.x * complex_2.y + complex_1.y * complex_2.x;
+	return vec2(real, imag);
+}
+
+//转换成单位根向量
+vec2 RootOfUnitVector(int n, int k)
+{
+	vec2 result;
+	
+	result.x = cos(2.0 * PI * float(k) / float(n));
+	result.y = sin(2.0 * PI * float(k) / float(n));
+ 
+	return result;
+}

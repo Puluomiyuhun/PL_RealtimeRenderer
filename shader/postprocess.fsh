@@ -16,4 +16,5 @@ void main()
     vec3 mapped = vec3(1.0) - exp(-colors * exposure);
     FragColor.rgb = pow(mapped,vec3(1/2.2));
     FragColor.a = 1.0;
+
 }

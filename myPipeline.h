@@ -132,6 +132,29 @@ public:
                 scene->models[i].meshes[j].Draw(shader);
             }
         }
+        /*海洋渲染*/
+        if (scene->ocean->show) {
+            scene->ocean->calculate(time, &scene->cameras[0]);
+            myShader shader = scene->shaders[2];
+            shader.use();
+            /*shader光源设置*/
+            shader.setVec3("u_lightDirection", scene->lights[0]->getDir());
+            shader.setVec3("u_color", scene->lights[0]->getColor() * scene->lights[0]->getIntensity());
+
+            shader.setVec3("camPos", scene->cameras[0].cameraPos);
+            glm::mat4 model = glm::identity<glm::mat4>();
+            view = scene->cameras[0].getView();
+            projection = glm::perspective(scene->cameras[0].fov, screenWidth / screenHeight, 0.1f, 500.0f);
+            shader.setMatrix("model", model);
+            shader.setMatrix("view", view);
+            shader.setMatrix("projection", projection);
+
+            shader.setVec3("diffuse", scene->ocean->diffuse);
+            shader.setFloat("specular", scene->ocean->specular);
+            shader.setFloat("transparency", scene->ocean->transparency);
+
+            scene->ocean->draw(hdrCubemap_mipmap);
+        }
 
         /////////////////////////这里开始立方体环境贴图渲染
         /*立方体贴图背景渲染*/
@@ -488,5 +511,4 @@ private:
     GLuint depthMap, depthCubemap;
 
     float time = 0;
-
 };

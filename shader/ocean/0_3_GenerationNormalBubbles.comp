@@ -1,0 +1,59 @@
+#version 440 core
+
+const int LOCAL_WORK_GROUP_SIZE = 32;
+
+const int L = 5110;
+const int N = 512;
+const float PI = 3.141592653589;
+
+layout(binding = 0 ,rg32f) uniform image2D u_imageDx;
+layout(binding = 1 ,rg32f) uniform image2D u_imageDy;
+layout(binding = 2 ,rg32f) uniform image2D u_imageDz;
+layout(binding = 3 ,rgba32f) uniform image2D u_imageNormal;
+//layout(binding = 4 ,rgba32f) uniform image2D u_imageBubbles;
+
+layout(local_size_x = LOCAL_WORK_GROUP_SIZE, local_size_y = LOCAL_WORK_GROUP_SIZE, local_size_z = 1) in;
+
+void main()
+{
+    //通过gl_GlobalInvocationID来得知当前执行单元在全局工作组中的位置
+	ivec2 storePos = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
+
+    //计算法线
+    float uintLength = L / (N - 1.0f);//两点间单位长度
+    //获取当前点，周围4个点的uv坐标
+    ivec2 uvX1 = ivec2((storePos.x - 1 + N) % N, storePos.y);
+    ivec2 uvX2 = ivec2((storePos.x + 1 + N) % N, storePos.y);
+    ivec2 uvZ1 = ivec2(storePos.x, (storePos.y - 1 + N) % N);
+    ivec2 uvZ2 = ivec2(storePos.x, (storePos.y + 1 + N) % N);
+
+    //以当前点为中心，获取周围4个点的偏移值
+    vec3 x1D = vec3(imageLoad(u_imageDx, uvX1).x, imageLoad(u_imageDy, uvX1).x, imageLoad(u_imageDz, uvX1).x);
+    vec3 x2D = vec3(imageLoad(u_imageDx, uvX2).x, imageLoad(u_imageDy, uvX2).x, imageLoad(u_imageDz, uvX2).x);
+    vec3 z1D = vec3(imageLoad(u_imageDx, uvZ1).x, imageLoad(u_imageDy, uvZ1).x, imageLoad(u_imageDz, uvZ1).x);
+    vec3 z2D = vec3(imageLoad(u_imageDx, uvZ2).x, imageLoad(u_imageDy, uvZ2).x, imageLoad(u_imageDz, uvZ2).x);
+
+    //以当前点为原点，构建周围4个点的坐标
+    vec3 x1 = vec3(x1D.x - uintLength, x1D.yz);
+    vec3 x2 = vec3(x2D.x + uintLength, x2D.yz);
+    vec3 z1 = vec3(z1D.xy, z1D.z - uintLength);
+    vec3 z2 = vec3(z2D.xy, z2D.z + uintLength);
+
+    //计算两个切向量
+    vec3 tangentX = x2 - x1;
+    vec3 tangentZ = z2 - z1;
+
+    //计算法线
+    vec3 normal = normalize(cross(tangentZ, tangentX));
+
+    //计算泡沫
+    vec3 ddx = x2D - x1D;
+    vec3 ddz = z2D - z1D;
+    //雅可比行列式
+    float jacobian = (1.0f + ddx.x) * (1.0f + ddz.z) - ddx.z * ddz.x;
+
+    //jacobian = saturate(max(0, BubblesThreshold - saturate(jacobian)) * BubblesScale);
+
+    imageStore(u_imageNormal, storePos, vec4(normal, 0.0));
+    //imageStore(u_imageBubbles, storePos, vec4(jacobian, jacobian, jacobian, 0.0));
+}
